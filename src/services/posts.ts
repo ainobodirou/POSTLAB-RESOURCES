@@ -52,17 +52,30 @@ function buildCounts(index: number) {
   };
 }
 
+function normalizeStoragePath(imageId: string): string {
+  return imageId
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(new RegExp(`^${POST_IMAGES_BUCKET}/`, 'i'), '');
+}
+
 function getPostImageUrl(imageId: string | null): string | undefined {
-  if (!imageId) {
+  if (!imageId?.trim()) {
     return undefined;
   }
 
+  if (/^https?:\/\//i.test(imageId)) {
+    return encodeURI(imageId.trim());
+  }
+
+  const normalizedPath = normalizeStoragePath(imageId);
   const supabase = getSupabaseClient();
   const { data } = supabase.storage
     .from(POST_IMAGES_BUCKET)
-    .getPublicUrl(imageId);
+    .getPublicUrl(normalizedPath);
 
-  return data.publicUrl;
+  return encodeURI(data.publicUrl);
 }
 
 function mapRowToPost(row: PostRow, index: number): Post {

@@ -596,21 +596,20 @@ function App() {
 
                     {post.media ? (
                       <div
-                        className="post-media"
+                        className={`post-media ${post.media.kind === 'image' ? 'is-image' : ''}`}
                         aria-label={post.media.alt}
                         style={{
                           background:
                             post.media.kind === 'gradient' ? post.media.accent : undefined,
-                          backgroundImage:
-                            post.media.kind === 'image' && post.media.src
-                              ? `url(${post.media.src})`
-                              : undefined,
                         }}
                       >
-                        <div className="media-caption">
-                          <span>{post.source ?? 'SUPABASE FEED'}</span>
-                          <strong>{formatCount(post.counts.views)} views</strong>
-                        </div>
+                        {post.media.kind === 'image' && post.media.src ? (
+                          <img
+                            src={post.media.src}
+                            alt={post.media.alt}
+                            loading="lazy"
+                          />
+                        ) : null}
                       </div>
                     ) : null}
 
