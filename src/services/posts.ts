@@ -7,6 +7,8 @@ interface FeedLoadResult {
   fallbackMessage?: string;
 }
 
+const POST_IMAGES_BUCKET = 'content_images';
+
 function formatRelativeTime(dateValue: string | null): string {
   if (!dateValue) {
     return 'now';
@@ -50,6 +52,19 @@ function buildCounts(index: number) {
   };
 }
 
+function getPostImageUrl(imageId: string | null): string | undefined {
+  if (!imageId) {
+    return undefined;
+  }
+
+  const supabase = getSupabaseClient();
+  const { data } = supabase.storage
+    .from(POST_IMAGES_BUCKET)
+    .getPublicUrl(imageId);
+
+  return data.publicUrl;
+}
+
 function mapRowToPost(row: PostRow, index: number): Post {
   const gradientPalette = [
     'linear-gradient(135deg, #1d9bf0, #0f6ab8)',
@@ -58,8 +73,7 @@ function mapRowToPost(row: PostRow, index: number): Post {
     'linear-gradient(135deg, #6b5cff, #18c4c1)',
   ];
   const accent = gradientPalette[index % gradientPalette.length];
-  const imageSource =
-    row.image_id && /^https?:\/\//.test(row.image_id) ? row.image_id : undefined;
+  const imageSource = getPostImageUrl(row.image_id);
 
   return {
     id: row.post_id,
