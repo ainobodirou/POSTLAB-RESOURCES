@@ -21,6 +21,8 @@ import { createParticipantSession, getParticipantById } from './services/partici
 import { loadPosts } from './services/posts';
 import { OnboardingStep, ParticipantSession, Post, Theme } from './types';
 
+type SessionModal = 'participant-created' | 'session-finished' | null;
+
 function formatCount(value: number): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`;
@@ -92,7 +94,8 @@ function App() {
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [feedNotice, setFeedNotice] = useState<string | null>(null);
-  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<SessionModal>(null);
+  const [pendingLikeWrites, setPendingLikeWrites] = useState(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -227,6 +230,7 @@ function App() {
     }
 
     try {
+      setPendingLikeWrites((count) => count + 1);
       await setParticipantPostLike(participantSession.participantId, postId, liked);
     } catch (error) {
       updatePost(postId, (post) => ({
@@ -238,6 +242,8 @@ function App() {
         },
       }));
       setFeedNotice(getErrorMessage(error));
+    } finally {
+      setPendingLikeWrites((count) => Math.max(0, count - 1));
     }
   }
 
@@ -280,10 +286,66 @@ function App() {
       writeParticipantSession(session);
       setParticipantSession(session);
       setOnboardingStep('idAssigned');
+      setActiveModal('participant-created');
     } catch (error) {
       setOnboardingError(getErrorMessage(error));
       setOnboardingStep('confirmed');
     }
+  }
+
+  function renderSessionModal() {
+    if (!activeModal || !participantSession) {
+      return null;
+    }
+
+    const isCreationModal = activeModal === 'participant-created';
+
+    return (
+      <div className="session-modal-backdrop" role="presentation">
+        <section
+          className="session-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="session-modal-title"
+        >
+          <span className="landing-eyebrow">
+            {isCreationModal ? 'Participant ID assigned' : 'Thank you'}
+          </span>
+          <h2 id="session-modal-title">
+            {isCreationModal ? 'Remember your participant ID.' : 'You have completed the feed task.'}
+          </h2>
+          <p>
+            Your participant ID is <strong>#{participantSession.participantCode}</strong>. Please
+            remember it because you will be asked for it later in the survey.
+            {!isCreationModal
+              ? ' You have now finished the simulated feed session and can exit this environment.'
+              : ' You will also be reminded of it again at the end of the session.'}
+          </p>
+          <div className="participant-code-shell modal-code-shell" aria-live="polite">
+            <span>Participant ID</span>
+            <strong>{participantSession.participantCode}</strong>
+          </div>
+          <div className="landing-actions">
+            <button
+              className="continue-button"
+              type="button"
+              onClick={() => {
+                const closingCreationModal = activeModal === 'participant-created';
+                setActiveModal(null);
+
+                if (closingCreationModal) {
+                  setOnboardingStep('feed');
+                } else {
+                  setOnboardingStep('idAssigned');
+                }
+              }}
+            >
+              {isCreationModal ? 'To study environment' : 'Close'}
+            </button>
+          </div>
+        </section>
+      </div>
+    );
   }
 
   function renderOnboarding() {
@@ -320,9 +382,11 @@ function App() {
             <span className="landing-eyebrow">Participant onboarding</span>
             <h1 id="landing-title">Welcome to the study feed.</h1>
             <p>
-              Read the study instructions carefully before continuing. Once you confirm,
-              the app will generate your participant ID, store it in Supabase, and use it
-              for your interaction data in this session.
+              You'll be presented with the simulated feed environment consisting of
+              content on various topics. Please scroll through the feed and like the
+              content that you enjoy, relate to, or that resonates with you in any other
+              way. The engagement should be active and intentional, rather than forced or
+              purely passive scrolling.
             </p>
 
             {participantSession ? (
@@ -338,10 +402,6 @@ function App() {
 
             {isRestoringSession ? (
               <p className="status-banner">Restoring your saved participant session...</p>
-            ) : null}
-
-            {completionNotice ? (
-              <p className="status-banner">{completionNotice}</p>
             ) : null}
 
             <div className="landing-actions">
@@ -373,9 +433,9 @@ function App() {
                 <button
                   className="continue-button"
                   type="button"
+                  disabled={activeModal === 'participant-created'}
                   onClick={() => {
                     setOnboardingError(null);
-                    setCompletionNotice(null);
                     setOnboardingStep('feed');
                   }}
                 >
@@ -391,12 +451,18 @@ function App() {
   }
 
   if (onboardingStep !== 'feed') {
-    return renderOnboarding();
+    return (
+      <>
+        {renderOnboarding()}
+        {renderSessionModal()}
+      </>
+    );
   }
 
   return (
-    <div className="feed-shell">
-      <main className="timeline-panel feed-only-panel">
+    <>
+      <div className="feed-shell">
+        <main className="timeline-panel feed-only-panel">
         <header className="timeline-tabs">
           <button
             type="button"
@@ -600,23 +666,26 @@ function App() {
           })}
 
           <section className="feed-endcap" aria-label="Finish feed simulation">
-            <p>You have reached the end of the simulated feed.</p>
+            <p>
+              You have reached the end of the simulated feed.
+              {pendingLikeWrites > 0 ? ' Saving your latest interactions...' : ''}
+            </p>
             <button
               className="continue-button"
               type="button"
+              disabled={pendingLikeWrites > 0}
               onClick={() => {
-                setCompletionNotice(
-                  `Feed simulation finished for participant #${participantSession?.participantCode}.`,
-                );
-                setOnboardingStep('idAssigned');
+                setActiveModal('session-finished');
               }}
             >
               Finish
             </button>
           </section>
         </section>
-      </main>
-    </div>
+        </main>
+      </div>
+      {renderSessionModal()}
+    </>
   );
 }
 
