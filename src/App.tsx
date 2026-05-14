@@ -312,19 +312,29 @@ function App() {
             {isCreationModal ? 'Participant ID assigned' : 'Thank you'}
           </span>
           <h2 id="session-modal-title">
-            {isCreationModal ? 'Remember your participant ID.' : 'You have completed the feed task.'}
+            {isCreationModal ? 'Remember your participant ID.' : 'Thank you!'}
           </h2>
-          <p>
-            Your participant ID is <strong>#{participantSession.participantCode}</strong>. Please
-            remember it because you will be asked for it later in the survey.
-            {!isCreationModal
-              ? ' You have now finished the simulated feed session and can exit this environment.'
-              : ' You will also be reminded of it again at the end of the session.'}
-          </p>
-          <div className="participant-code-shell modal-code-shell" aria-live="polite">
-            <span>Participant ID</span>
-            <strong>{participantSession.participantCode}</strong>
-          </div>
+          {isCreationModal ? (
+            <>
+              <p>
+                Your participant ID is <strong>#{participantSession.participantCode}</strong>. Please
+                remember it because you will be asked for it later in the survey. You will also
+                be reminded of it again at the end of the session.
+              </p>
+              <div className="participant-code-shell modal-code-shell" aria-live="polite">
+                <span>Participant ID</span>
+                <strong>{participantSession.participantCode}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="debrief-copy">
+              <p>
+                Your participant ID is <strong>#{participantSession.participantCode}</strong>. Please
+                remember it, as you will be asked to provide it in the survey.
+              </p>
+              <p>You can now close the task website.</p>
+            </div>
+          )}
           <div className="landing-actions">
             <button
               className="continue-button"
