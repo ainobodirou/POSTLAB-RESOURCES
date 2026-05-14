@@ -79,13 +79,6 @@ function getPostImageUrl(imageId: string | null): string | undefined {
 }
 
 function mapRowToPost(row: PostRow, index: number): Post {
-  const gradientPalette = [
-    'linear-gradient(135deg, #1d9bf0, #0f6ab8)',
-    'linear-gradient(135deg, #ff7a18, #ff4d4d)',
-    'linear-gradient(135deg, #17bf63, #0e8f5b)',
-    'linear-gradient(135deg, #6b5cff, #18c4c1)',
-  ];
-  const accent = gradientPalette[index % gradientPalette.length];
   const imageSource = getPostImageUrl(row.image_id);
 
   return {
@@ -106,11 +99,7 @@ function mapRowToPost(row: PostRow, index: number): Post {
           alt: row.topic ?? `Post image from ${row.author_name}`,
           src: imageSource,
         }
-      : {
-          kind: 'gradient',
-          alt: row.topic ?? `Topic preview for ${row.author_name}`,
-          accent,
-        },
+      : undefined,
     counts: buildCounts(index),
     flags: {
       liked: false,

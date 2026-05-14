@@ -120,6 +120,9 @@ function App() {
   );
   const [posts, setPosts] = useState<Post[]>([]);
   const [openReplyId, setOpenReplyId] = useState<string | null>(null);
+  const [failedImagePostIds, setFailedImagePostIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [isRestoringSession, setIsRestoringSession] = useState(
     () => readParticipantSession() !== null,
   );
@@ -204,6 +207,7 @@ function App() {
         }
 
         setPosts(nextPosts);
+        setFailedImagePostIds(new Set());
         setFeedNotice(feedResult.fallbackMessage ?? null);
       } catch (error) {
         if (cancelled) {
@@ -211,6 +215,7 @@ function App() {
         }
 
         setPosts(getMockPosts().map((post) => ({ ...post, persisted: false })));
+        setFailedImagePostIds(new Set());
         setFeedNotice(getErrorMessage(error));
       } finally {
         if (!cancelled) {
@@ -594,7 +599,7 @@ function App() {
 
                     <p className="post-content">{post.content}</p>
 
-                    {post.media ? (
+                    {post.media && !failedImagePostIds.has(post.id) ? (
                       <div
                         className={`post-media ${post.media.kind === 'image' ? 'is-image' : ''}`}
                         aria-label={post.media.alt}
@@ -608,6 +613,13 @@ function App() {
                             src={post.media.src}
                             alt={post.media.alt}
                             loading="lazy"
+                            onError={() =>
+                              setFailedImagePostIds((currentIds) => {
+                                const nextIds = new Set(currentIds);
+                                nextIds.add(post.id);
+                                return nextIds;
+                              })
+                            }
                           />
                         ) : null}
                       </div>
