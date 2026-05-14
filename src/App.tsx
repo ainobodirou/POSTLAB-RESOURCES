@@ -159,15 +159,17 @@ function App() {
       setFeedNotice(null);
 
       try {
-        const feedResult = await loadPosts();
+        if (!participantSession) {
+          throw new Error('Missing participant session for feed generation.');
+        }
+
+        const feedResult = await loadPosts(participantSession.participantId);
         let nextPosts = feedResult.posts;
 
-        if (participantSession) {
-          const likedPostIds = await getParticipantLikes(
-            participantSession.participantId,
-          );
-          nextPosts = applyLikedPostIds(nextPosts, likedPostIds);
-        }
+        const likedPostIds = await getParticipantLikes(
+          participantSession.participantId,
+        );
+        nextPosts = applyLikedPostIds(nextPosts, likedPostIds);
 
         if (cancelled) {
           return;

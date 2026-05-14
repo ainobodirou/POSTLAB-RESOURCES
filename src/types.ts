@@ -72,6 +72,13 @@ export interface ParticipantPostLikeRow {
   liked_at: string | null;
 }
 
+export interface FeedsetRow {
+  id: string;
+  participant_id: string;
+  feed: string[];
+  created_at: string | null;
+}
+
 export interface PostRow {
   post_id: string;
   author_name: string;
@@ -99,6 +106,21 @@ export interface Database {
           post_id?: string;
           liked?: boolean;
           liked_at?: string | null;
+        };
+      };
+      feedset: {
+        Row: FeedsetRow;
+        Insert: {
+          id?: string;
+          participant_id: string;
+          feed: string[];
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          participant_id?: string;
+          feed?: string[];
+          created_at?: string | null;
         };
       };
       participant_profiles: {

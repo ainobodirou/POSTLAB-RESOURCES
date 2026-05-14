@@ -8,23 +8,24 @@ interface FeedLoadResult {
 }
 
 const POST_IMAGES_BUCKET = 'content_images';
+const FEEDSET_SIZE = 25;
 
-function shufflePosts(posts: Post[]): Post[] {
-  const nextPosts = [...posts];
+function shuffleItems<T>(items: T[]): T[] {
+  const nextItems = [...items];
 
-  for (let index = nextPosts.length - 1; index > 0; index -= 1) {
+  for (let index = nextItems.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
-    const currentPost = nextPosts[index];
+    const currentItem = nextItems[index];
 
-    nextPosts[index] = nextPosts[swapIndex];
-    nextPosts[swapIndex] = currentPost;
+    nextItems[index] = nextItems[swapIndex];
+    nextItems[swapIndex] = currentItem;
   }
 
-  return nextPosts;
+  return nextItems;
 }
 
 function distributePosts(posts: Post[]): Post[] {
-  const shuffledPosts = shufflePosts(posts);
+  const shuffledPosts = shuffleItems(posts);
   const imagePosts = shuffledPosts.filter((post) => post.media?.kind === 'image');
   const textPosts = shuffledPosts.filter((post) => !post.media);
   const interleavedPosts: Post[] = [];
@@ -66,6 +67,10 @@ function distributePosts(posts: Post[]): Post[] {
   }
 
   return interleavedPosts;
+}
+
+function sampleRows(rows: PostRow[], size: number): PostRow[] {
+  return shuffleItems(rows).slice(0, size);
 }
 
 function stripPlaceholderMedia(posts: Post[]): Post[] {
@@ -177,35 +182,119 @@ function mapRowToPost(row: PostRow, index: number): Post {
   };
 }
 
-export async function loadPosts(): Promise<FeedLoadResult> {
+function mapRowsById(rows: PostRow[]): Map<string, PostRow> {
+  return new Map(rows.map((row) => [row.post_id, row]));
+}
+
+function mapOrderedRowsToPosts(rows: PostRow[]): Post[] {
+  return rows.map(mapRowToPost);
+}
+
+async function getExistingFeedRows(
+  participantId: string,
+): Promise<PostRow[] | null> {
+  const supabase = getSupabaseClient();
+  const { data: feedsetRow, error: feedsetError } = await supabase
+    .from('feedset')
+    .select('feed')
+    .eq('participant_id', participantId)
+    .maybeSingle();
+
+  if (feedsetError) {
+    throw new Error(`Unable to load participant feedset: ${feedsetError.message}`);
+  }
+
+  const feedIds: string[] = Array.isArray(feedsetRow?.feed) ? feedsetRow.feed : [];
+
+  if (feedIds.length === 0) {
+    return null;
+  }
+
+  const { data: postRows, error: postsError } = await supabase
+    .from('posts')
+    .select('*')
+    .in('post_id', feedIds);
+
+  if (postsError) {
+    throw new Error(`Unable to load participant feed posts: ${postsError.message}`);
+  }
+
+  const rowsById = mapRowsById(postRows as PostRow[]);
+  return feedIds
+    .map((postId: string) => rowsById.get(postId))
+    .filter((row: PostRow | undefined): row is PostRow => Boolean(row));
+}
+
+async function createFeedsetForParticipant(
+  participantId: string,
+): Promise<PostRow[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('posts')
     .select('*')
-    .order('created_at', { ascending: false })
-    .limit(40);
+    .order('created_at', { ascending: false });
 
   if (error) {
-    return {
-      posts: stripPlaceholderMedia(
-        getMockPosts().map((post) => ({ ...post, persisted: false })),
-      ),
-      fallbackMessage:
-        'Supabase posts could not be loaded, so the feed is showing local fallback data.',
-    };
+    throw new Error(`Unable to load posts: ${error.message}`);
   }
 
   if (data.length === 0) {
+    return [];
+  }
+
+  const selectedRows = sampleRows(data, Math.min(FEEDSET_SIZE, data.length));
+  const distributedPosts = distributePosts(mapOrderedRowsToPosts(selectedRows));
+  const orderedPostIds = distributedPosts.map((post) => post.id);
+
+  const { error: insertError } = await supabase.from('feedset').insert({
+    participant_id: participantId,
+    feed: orderedPostIds,
+  });
+
+  if (insertError) {
+    throw new Error(`Unable to save participant feedset: ${insertError.message}`);
+  }
+
+  const rowsById = mapRowsById(selectedRows);
+  return orderedPostIds
+    .map((postId: string) => rowsById.get(postId))
+    .filter((row: PostRow | undefined): row is PostRow => Boolean(row));
+}
+
+export async function loadPosts(participantId: string): Promise<FeedLoadResult> {
+  try {
+    const existingFeedRows = await getExistingFeedRows(participantId);
+
+    if (existingFeedRows && existingFeedRows.length > 0) {
+      return {
+        posts: mapOrderedRowsToPosts(existingFeedRows),
+      };
+    }
+
+    const createdFeedRows = await createFeedsetForParticipant(participantId);
+
+    if (createdFeedRows.length === 0) {
+      return {
+        posts: stripPlaceholderMedia(
+          getMockPosts().map((post) => ({ ...post, persisted: false })),
+        ),
+        fallbackMessage:
+          'No posts are available in Supabase yet, so the feed is showing local fallback data.',
+      };
+    }
+
+    return {
+      posts: mapOrderedRowsToPosts(createdFeedRows),
+    };
+  } catch (error) {
     return {
       posts: stripPlaceholderMedia(
         getMockPosts().map((post) => ({ ...post, persisted: false })),
       ),
       fallbackMessage:
-        'No posts are available in Supabase yet, so the feed is showing local fallback data.',
+        error instanceof Error
+          ? error.message
+          : 'Supabase posts could not be loaded, so the feed is showing local fallback data.',
     };
   }
-
-  return {
-    posts: distributePosts(data.map(mapRowToPost)),
-  };
 }
