@@ -2,20 +2,13 @@ import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
-  Bell,
-  Bookmark,
   Check,
-  CircleEllipsis,
-  Compass,
   Heart,
-  Home,
   Image,
-  Mail,
   MapPin,
   MessageCircle,
   MoreHorizontal,
   Repeat2,
-  Search,
   Share,
   Smile,
   User,
@@ -27,45 +20,6 @@ import { getParticipantLikes, setParticipantPostLike } from './services/likes';
 import { createParticipantSession, getParticipantById } from './services/participants';
 import { loadPosts } from './services/posts';
 import { OnboardingStep, ParticipantSession, Post, Theme } from './types';
-
-type NavItem = {
-  label: string;
-  icon: typeof Home;
-  active?: boolean;
-  badge?: string;
-};
-
-const navItems: NavItem[] = [
-  { label: 'Home', icon: Home, active: true },
-  { label: 'Explore', icon: Compass },
-  { label: 'Notifications', icon: Bell, badge: '20+' },
-  { label: 'Messages', icon: Mail },
-  { label: 'Bookmarks', icon: Bookmark },
-  { label: 'Profile', icon: User },
-  { label: 'More', icon: CircleEllipsis },
-];
-
-const newsItems = [
-  {
-    title: "Real Madrid Fans Petition for Mbappe's Exit Amid Poor Season",
-    meta: '3 days ago - Sports - 206.4K posts',
-  },
-  {
-    title: 'BTS Reunites for Chaotic Foot Volleyball in TRIP EP.3',
-    meta: '2 days ago - Other - 287.7K posts',
-  },
-  {
-    title: "Man City Draw 3-3 with Everton, Boosting Arsenal's Five-Point Lead",
-    meta: '3 days ago - Sports - 309.5K posts',
-  },
-];
-
-const trends = [
-  { label: '#mafsnl', meta: 'Trending in Netherlands' },
-  { label: '#6mei', meta: 'Trending in Netherlands' },
-  { label: 'Prototype testing', meta: '8,914 posts' },
-  { label: 'Social media research', meta: '4,286 posts' },
-];
 
 function formatCount(value: number): string {
   if (value >= 1_000_000) {
@@ -91,6 +45,15 @@ function getErrorMessage(error: unknown): string {
   }
 
   return 'Something went wrong.';
+}
+
+function normalizeFallbackPosts(posts: Post[]): Post[] {
+  return posts.map((post) => ({
+    ...post,
+    persisted: false,
+    media: post.media?.kind === 'image' ? post.media : undefined,
+    content: post.content.replace(/\\n/g, '\n'),
+  }));
 }
 
 function applyLikedPostIds(posts: Post[], likedPostIds: Set<string>): Post[] {
@@ -129,6 +92,7 @@ function App() {
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [feedNotice, setFeedNotice] = useState<string | null>(null);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -214,7 +178,7 @@ function App() {
           return;
         }
 
-        setPosts(getMockPosts().map((post) => ({ ...post, persisted: false })));
+        setPosts(normalizeFallbackPosts(getMockPosts()));
         setFailedImagePostIds(new Set());
         setFeedNotice(getErrorMessage(error));
       } finally {
@@ -373,7 +337,11 @@ function App() {
             ) : null}
 
             {isRestoringSession ? (
-              <p className="status-banner">Restoring your saved participant session…</p>
+              <p className="status-banner">Restoring your saved participant session...</p>
+            ) : null}
+
+            {completionNotice ? (
+              <p className="status-banner">{completionNotice}</p>
             ) : null}
 
             <div className="landing-actions">
@@ -397,7 +365,7 @@ function App() {
                   disabled={onboardingStep === 'creatingId' || isRestoringSession}
                   onClick={() => void handleGenerateParticipant()}
                 >
-                  {onboardingStep === 'creatingId' ? 'Generating ID…' : 'Generate ID'}
+                  {onboardingStep === 'creatingId' ? 'Generating ID...' : 'Generate ID'}
                 </button>
               ) : null}
 
@@ -407,6 +375,7 @@ function App() {
                   type="button"
                   onClick={() => {
                     setOnboardingError(null);
+                    setCompletionNotice(null);
                     setOnboardingStep('feed');
                   }}
                 >
@@ -426,57 +395,8 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="left-sidebar">
-        <div className="left-sidebar-inner">
-          <a className="x-logo" href="#" aria-label="X home">
-            <X size={32} strokeWidth={2.4} />
-          </a>
-
-          <nav className="sidebar-nav" aria-label="Primary navigation">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <button
-                  key={item.label}
-                  className={`nav-item ${item.active ? 'is-active' : ''}`}
-                  type="button"
-                >
-                  <span className="nav-icon-wrap">
-                    <Icon size={26} strokeWidth={item.active ? 3 : 2.25} />
-                    {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-                  </span>
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <button className="primary-post-button" type="button">
-            Post
-          </button>
-
-          <div className="theme-switch" aria-label="Theme controls">
-            <button
-              type="button"
-              className={theme === 'light' ? 'is-selected' : ''}
-              onClick={() => setTheme('light')}
-            >
-              Light
-            </button>
-            <button
-              type="button"
-              className={theme === 'dark' ? 'is-selected' : ''}
-              onClick={() => setTheme('dark')}
-            >
-              Dark
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="timeline-panel">
+    <div className="feed-shell">
+      <main className="timeline-panel feed-only-panel">
         <header className="timeline-tabs">
           <button
             type="button"
@@ -529,33 +449,8 @@ function App() {
           </div>
         </section>
 
-        <section className="view-card">
-          <button className="post-more" type="button" aria-label="More options">
-            <MoreHorizontal size={20} />
-          </button>
-          <h1>Participant #{participantSession?.participantCode}</h1>
-          <p>
-            Your participant ID is now attached to any like interactions that are backed by
-            Supabase. The rest of the interface remains available as a frontend prototype.
-          </p>
-          <button
-            className="black-pill"
-            type="button"
-            onClick={() => {
-              clearParticipantSession();
-              setParticipantSession(null);
-              setPosts([]);
-              setOnboardingStep('instructions');
-              setFeedNotice(null);
-              setOnboardingError(null);
-            }}
-          >
-            Reset participant
-          </button>
-        </section>
-
         {feedNotice ? <p className="feed-status">{feedNotice}</p> : null}
-        {isFeedLoading ? <p className="feed-status">Loading feed…</p> : null}
+        {isFeedLoading ? <p className="feed-status">Loading feed...</p> : null}
 
         <section className="feed-list" aria-label="Scrollable feed">
           {posts.map((post, index) => {
@@ -603,10 +498,6 @@ function App() {
                       <div
                         className={`post-media ${post.media.kind === 'image' ? 'is-image' : ''}`}
                         aria-label={post.media.alt}
-                        style={{
-                          background:
-                            post.media.kind === 'gradient' ? post.media.accent : undefined,
-                        }}
                       >
                         {post.media.kind === 'image' && post.media.src ? (
                           <img
@@ -707,57 +598,24 @@ function App() {
               </article>
             );
           })}
-        </section>
-      </main>
 
-      <aside className="right-rail">
-        <div className="right-rail-inner">
-          <label className="search-shell">
-            <Search size={18} />
-            <input type="search" placeholder="Search" aria-label="Search" />
-          </label>
-
-          <section className="rail-card premium-card">
-            <div className="premium-heading">
-              <h2>Study flow active</h2>
-              <span>Live</span>
-            </div>
-            <p>
-              Participant onboarding is now backed by Supabase, and likes are persisted
-              against the current participant profile.
-            </p>
-            <button className="blue-pill" type="button">
-              Review session
+          <section className="feed-endcap" aria-label="Finish feed simulation">
+            <p>You have reached the end of the simulated feed.</p>
+            <button
+              className="continue-button"
+              type="button"
+              onClick={() => {
+                setCompletionNotice(
+                  `Feed simulation finished for participant #${participantSession?.participantCode}.`,
+                );
+                setOnboardingStep('idAssigned');
+              }}
+            >
+              Finish
             </button>
           </section>
-
-          <section className="rail-card news-card">
-            <div className="rail-heading">
-              <h2>Today's News</h2>
-              <button type="button" aria-label="Dismiss news">
-                <X size={18} />
-              </button>
-            </div>
-            {newsItems.map((item) => (
-              <button className="news-item" type="button" key={item.title}>
-                <strong>{item.title}</strong>
-                <span>{item.meta}</span>
-              </button>
-            ))}
-          </section>
-
-          <section className="rail-card trends-card">
-            <h2>What's happening</h2>
-            {trends.map((trend) => (
-              <button key={trend.label} className="trend-item" type="button">
-                <span>{trend.meta}</span>
-                <strong>{trend.label}</strong>
-                <MoreHorizontal size={18} />
-              </button>
-            ))}
-          </section>
-        </div>
-      </aside>
+        </section>
+      </main>
     </div>
   );
 }

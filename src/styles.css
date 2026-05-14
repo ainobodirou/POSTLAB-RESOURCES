@@ -354,6 +354,14 @@ a {
   justify-content: center;
 }
 
+.feed-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background: var(--surface);
+}
+
 .left-sidebar {
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -487,6 +495,11 @@ a {
   min-width: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
+}
+
+.feed-only-panel {
+  width: min(680px, 100%);
+  border-left: 1px solid var(--border);
 }
 
 .timeline-tabs {
@@ -676,6 +689,22 @@ a {
 .feed-list {
   display: flex;
   flex-direction: column;
+}
+
+.feed-endcap {
+  display: grid;
+  gap: 16px;
+  place-items: center;
+  padding: 28px 16px 40px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.feed-endcap p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .post-card {
@@ -1194,6 +1223,10 @@ a {
     width: 100%;
     border-right: 0;
     padding-bottom: 56px;
+  }
+
+  .feed-only-panel {
+    border-left: 0;
   }
 
   .composer-card,

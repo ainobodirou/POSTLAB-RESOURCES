@@ -9,12 +9,73 @@ interface FeedLoadResult {
 
 const POST_IMAGES_BUCKET = 'content_images';
 
+function shufflePosts(posts: Post[]): Post[] {
+  const nextPosts = [...posts];
+
+  for (let index = nextPosts.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const currentPost = nextPosts[index];
+
+    nextPosts[index] = nextPosts[swapIndex];
+    nextPosts[swapIndex] = currentPost;
+  }
+
+  return nextPosts;
+}
+
+function distributePosts(posts: Post[]): Post[] {
+  const shuffledPosts = shufflePosts(posts);
+  const imagePosts = shuffledPosts.filter((post) => post.media?.kind === 'image');
+  const textPosts = shuffledPosts.filter((post) => !post.media);
+  const interleavedPosts: Post[] = [];
+  let preferImages = imagePosts.length >= textPosts.length;
+
+  while (imagePosts.length > 0 || textPosts.length > 0) {
+    const preferredPosts = preferImages ? imagePosts : textPosts;
+    const fallbackPosts = preferImages ? textPosts : imagePosts;
+
+    if (preferredPosts.length > 0) {
+      interleavedPosts.push(preferredPosts.shift()!);
+    } else if (fallbackPosts.length > 0) {
+      interleavedPosts.push(fallbackPosts.shift()!);
+    }
+
+    preferImages = !preferImages;
+  }
+
+  for (let index = 1; index < interleavedPosts.length; index += 1) {
+    const currentPost = interleavedPosts[index];
+    const previousPost = interleavedPosts[index - 1];
+
+    if (
+      currentPost.source === previousPost.source ||
+      currentPost.author.name === previousPost.author.name
+    ) {
+      const swapIndex = interleavedPosts.findIndex(
+        (post, candidateIndex) =>
+          candidateIndex > index &&
+          post.source !== previousPost.source &&
+          post.author.name !== previousPost.author.name,
+      );
+
+      if (swapIndex > index) {
+        interleavedPosts[index] = interleavedPosts[swapIndex];
+        interleavedPosts[swapIndex] = currentPost;
+      }
+    }
+  }
+
+  return interleavedPosts;
+}
+
 function stripPlaceholderMedia(posts: Post[]): Post[] {
-  return posts.map((post) => ({
-    ...post,
-    media: post.media?.kind === 'image' ? post.media : undefined,
-    content: post.content.replace(/\\n/g, '\n'),
-  }));
+  return distributePosts(
+    posts.map((post) => ({
+      ...post,
+      media: post.media?.kind === 'image' ? post.media : undefined,
+      content: post.content.replace(/\\n/g, '\n'),
+    })),
+  );
 }
 
 function formatRelativeTime(dateValue: string | null): string {
@@ -145,6 +206,6 @@ export async function loadPosts(): Promise<FeedLoadResult> {
   }
 
   return {
-    posts: data.map(mapRowToPost),
+    posts: distributePosts(data.map(mapRowToPost)),
   };
 }
