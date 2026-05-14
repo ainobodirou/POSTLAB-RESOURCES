@@ -9,6 +9,14 @@ interface FeedLoadResult {
 
 const POST_IMAGES_BUCKET = 'content_images';
 
+function stripPlaceholderMedia(posts: Post[]): Post[] {
+  return posts.map((post) => ({
+    ...post,
+    media: post.media?.kind === 'image' ? post.media : undefined,
+    content: post.content.replace(/\\n/g, '\n'),
+  }));
+}
+
 function formatRelativeTime(dateValue: string | null): string {
   if (!dateValue) {
     return 'now';
@@ -90,7 +98,7 @@ function mapRowToPost(row: PostRow, index: number): Post {
       avatarSeed: row.author_name,
       verified: index % 3 === 0,
     },
-    content: row.content,
+    content: row.content.replace(/\\n/g, '\n'),
     timestampLabel: formatRelativeTime(row.created_at),
     source: row.topic ?? 'Supabase',
     media: imageSource
@@ -118,7 +126,9 @@ export async function loadPosts(): Promise<FeedLoadResult> {
 
   if (error) {
     return {
-      posts: getMockPosts().map((post) => ({ ...post, persisted: false })),
+      posts: stripPlaceholderMedia(
+        getMockPosts().map((post) => ({ ...post, persisted: false })),
+      ),
       fallbackMessage:
         'Supabase posts could not be loaded, so the feed is showing local fallback data.',
     };
@@ -126,7 +136,9 @@ export async function loadPosts(): Promise<FeedLoadResult> {
 
   if (data.length === 0) {
     return {
-      posts: getMockPosts().map((post) => ({ ...post, persisted: false })),
+      posts: stripPlaceholderMedia(
+        getMockPosts().map((post) => ({ ...post, persisted: false })),
+      ),
       fallbackMessage:
         'No posts are available in Supabase yet, so the feed is showing local fallback data.',
     };
