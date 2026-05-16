@@ -19,6 +19,7 @@ import { getMockPosts } from './mockFeed';
 import { getParticipantLikes, setParticipantPostLike } from './services/likes';
 import { createParticipantSession, getParticipantById } from './services/participants';
 import { loadPosts } from './services/posts';
+import { getParticipantReposts, setParticipantPostRepost } from './services/reposts';
 import { OnboardingStep, ParticipantSession, Post, Theme } from './types';
 
 type SessionModal = 'participant-created' | 'session-finished' | null;
@@ -69,6 +70,24 @@ function applyLikedPostIds(posts: Post[], likedPostIds: Set<string>): Post[] {
         ...post.counts,
         likes:
           liked && !post.flags.liked ? post.counts.likes + 1 : post.counts.likes,
+      },
+    };
+  });
+}
+
+function applyRepostedPostIds(posts: Post[], repostedPostIds: Set<string>): Post[] {
+  return posts.map((post) => {
+    const reposted = repostedPostIds.has(post.id);
+
+    return {
+      ...post,
+      flags: { ...post.flags, reposted },
+      counts: {
+        ...post.counts,
+        reposts:
+          reposted && !post.flags.reposted
+            ? post.counts.reposts + 1
+            : post.counts.reposts,
       },
     };
   });
@@ -129,7 +148,7 @@ function App() {
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [feedNotice, setFeedNotice] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<SessionModal>(null);
-  const [pendingLikeWrites, setPendingLikeWrites] = useState(0);
+  const [pendingEngagementWrites, setPendingEngagementWrites] = useState(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -222,6 +241,11 @@ function App() {
         );
         nextPosts = applyLikedPostIds(nextPosts, likedPostIds);
 
+        const repostedPostIds = await getParticipantReposts(
+          participantSession.participantId,
+        );
+        nextPosts = applyRepostedPostIds(nextPosts, repostedPostIds);
+
         if (cancelled) {
           return;
         }
@@ -283,7 +307,7 @@ function App() {
     }
 
     try {
-      setPendingLikeWrites((count) => count + 1);
+      setPendingEngagementWrites((count) => count + 1);
       await setParticipantPostLike(participantSession.participantId, postId, liked);
     } catch (error) {
       updatePost(postId, (post) => ({
@@ -296,23 +320,59 @@ function App() {
       }));
       setFeedNotice(getErrorMessage(error));
     } finally {
-      setPendingLikeWrites((count) => Math.max(0, count - 1));
+      setPendingEngagementWrites((count) => Math.max(0, count - 1));
     }
   }
 
-  function onRepost(postId: string) {
-    updatePost(postId, (post) => {
-      const reposted = !post.flags.reposted;
+  async function onRepost(postId: string) {
+    const targetPost = posts.find((post) => post.id === postId);
 
+    if (!targetPost) {
+      return;
+    }
+
+    const reposted = !targetPost.flags.reposted;
+
+    updatePost(postId, (post) => {
       return {
         ...post,
         flags: { ...post.flags, reposted },
         counts: {
           ...post.counts,
-          reposts: reposted ? post.counts.reposts + 1 : post.counts.reposts - 1,
+          reposts: reposted ? post.counts.reposts + 1 : Math.max(0, post.counts.reposts - 1),
         },
       };
     });
+
+    if (!participantSession || !targetPost.persisted) {
+      setFeedNotice(
+        'This feed item is using fallback data, so the repost state only lives in the current session.',
+      );
+      return;
+    }
+
+    try {
+      setPendingEngagementWrites((count) => count + 1);
+      await setParticipantPostRepost(
+        participantSession.participantId,
+        postId,
+        reposted,
+      );
+    } catch (error) {
+      updatePost(postId, (post) => ({
+        ...post,
+        flags: { ...post.flags, reposted: !reposted },
+        counts: {
+          ...post.counts,
+          reposts: reposted
+            ? Math.max(0, post.counts.reposts - 1)
+            : post.counts.reposts + 1,
+        },
+      }));
+      setFeedNotice(getErrorMessage(error));
+    } finally {
+      setPendingEngagementWrites((count) => Math.max(0, count - 1));
+    }
   }
 
   function onComment(postId: string) {
@@ -460,10 +520,10 @@ function App() {
             <h1 id="landing-title">Welcome to the study feed.</h1>
             <p>
               You'll be presented with the simulated feed environment consisting of
-              content on various topics. Please scroll through the feed and like the
-              content that you enjoy, relate to, or that resonates with you in any other
-              way. The engagement should be active and intentional, rather than forced or
-              purely passive scrolling.
+              content on various topics. Please scroll through the feed and use the
+              engagement actions to like and retweet the content that you enjoy, relate
+              to, or that resonates with you in any other way. The engagement should be
+              active and intentional, rather than forced or purely passive scrolling.
             </p>
 
             {participantSession ? (
@@ -684,7 +744,7 @@ function App() {
                       <button
                         className={`engagement-button ${post.flags.reposted ? 'repost-active' : ''}`}
                         type="button"
-                        onClick={() => onRepost(post.id)}
+                        onClick={() => void onRepost(post.id)}
                         aria-label="Repost"
                       >
                         <Repeat2 size={18} />
@@ -745,12 +805,12 @@ function App() {
           <section className="feed-endcap" aria-label="Finish feed simulation">
             <p>
               You have reached the end of the simulated feed.
-              {pendingLikeWrites > 0 ? ' Saving your latest interactions...' : ''}
+              {pendingEngagementWrites > 0 ? ' Saving your latest interactions...' : ''}
             </p>
             <button
               className="continue-button"
               type="button"
-              disabled={pendingLikeWrites > 0}
+              disabled={pendingEngagementWrites > 0}
               onClick={() => {
                 setActiveModal('session-finished');
               }}

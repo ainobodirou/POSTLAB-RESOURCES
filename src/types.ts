@@ -73,6 +73,14 @@ export interface ParticipantPostLikeRow {
   liked_at: string | null;
 }
 
+export interface ParticipantPostRepostRow {
+  id: string;
+  participant_id: string;
+  post_id: string;
+  reposted: boolean;
+  reposted_at: string | null;
+}
+
 export interface FeedsetRow {
   id: string;
   participant_id: string;
@@ -107,6 +115,23 @@ export interface Database {
           post_id?: string;
           liked?: boolean;
           liked_at?: string | null;
+        };
+      };
+      participant_post_reposts: {
+        Row: ParticipantPostRepostRow;
+        Insert: {
+          id?: string;
+          participant_id: string;
+          post_id: string;
+          reposted?: boolean;
+          reposted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          participant_id?: string;
+          post_id?: string;
+          reposted?: boolean;
+          reposted_at?: string | null;
         };
       };
       feedset: {
