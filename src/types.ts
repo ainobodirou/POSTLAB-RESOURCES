@@ -9,6 +9,7 @@ export type OnboardingStep =
 export interface ParticipantSession {
   participantId: string;
   participantCode: number;
+  postbackUrl?: string;
 }
 
 export interface Author {

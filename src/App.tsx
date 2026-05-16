@@ -74,11 +74,45 @@ function applyLikedPostIds(posts: Post[], likedPostIds: Set<string>): Post[] {
   });
 }
 
+function getSafePostbackUrl(): string | undefined {
+  const postbackUrl = new URLSearchParams(window.location.search).get('postbackUrl');
+
+  if (!postbackUrl) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(postbackUrl);
+    const isTrustedSurveyHost =
+      url.hostname === 'utwente.nl' || url.hostname.endsWith('.utwente.nl');
+
+    if (url.protocol === 'https:' && isTrustedSurveyHost) {
+      return url.toString();
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>('light');
   const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
+  const [currentPostbackUrl] = useState(() => getSafePostbackUrl());
   const [participantSession, setParticipantSession] = useState<ParticipantSession | null>(
-    () => readParticipantSession(),
+    () => {
+      const storedSession = readParticipantSession();
+
+      if (!storedSession || !currentPostbackUrl) {
+        return storedSession;
+      }
+
+      return {
+        ...storedSession,
+        postbackUrl: currentPostbackUrl,
+      };
+    },
   );
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(() =>
     readParticipantSession() ? 'idAssigned' : 'instructions',
@@ -100,6 +134,23 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    if (!currentPostbackUrl || !participantSession) {
+      return;
+    }
+
+    const sessionWithPostback = {
+      ...participantSession,
+      postbackUrl: currentPostbackUrl,
+    };
+
+    if (participantSession.postbackUrl !== currentPostbackUrl) {
+      setParticipantSession(sessionWithPostback);
+    }
+
+    writeParticipantSession(sessionWithPostback);
+  }, [currentPostbackUrl, participantSession]);
 
   useEffect(() => {
     if (!participantSession) {
@@ -284,7 +335,10 @@ function App() {
     setOnboardingStep('creatingId');
 
     try {
-      const session = await createParticipantSession();
+      const createdSession = await createParticipantSession();
+      const session = currentPostbackUrl
+        ? { ...createdSession, postbackUrl: currentPostbackUrl }
+        : createdSession;
       writeParticipantSession(session);
       setParticipantSession(session);
       setOnboardingStep('idAssigned');
@@ -301,6 +355,7 @@ function App() {
     }
 
     const isCreationModal = activeModal === 'participant-created';
+    const postbackUrl = participantSession.postbackUrl;
 
     return (
       <div className="session-modal-backdrop" role="presentation">
@@ -334,7 +389,11 @@ function App() {
                 Your participant ID is <strong>#{participantSession.participantCode}</strong>. Please
                 remember it, as you will be asked to provide it in the survey.
               </p>
-              <p>You can now close the task website.</p>
+              <p>
+                {postbackUrl
+                  ? 'You can now return to the survey.'
+                  : 'You can now close the task website.'}
+              </p>
             </div>
           )}
           <div className="landing-actions">
@@ -347,12 +406,18 @@ function App() {
 
                 if (closingCreationModal) {
                   setOnboardingStep('feed');
+                } else if (postbackUrl) {
+                  window.location.assign(postbackUrl);
                 } else {
                   setOnboardingStep('idAssigned');
                 }
               }}
             >
-              {isCreationModal ? 'To study environment' : 'Close'}
+              {isCreationModal
+                ? 'To study environment'
+                : postbackUrl
+                  ? 'Return to survey'
+                  : 'Close'}
             </button>
           </div>
         </section>

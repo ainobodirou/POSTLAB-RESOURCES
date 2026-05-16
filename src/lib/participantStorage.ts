@@ -19,6 +19,10 @@ export function readParticipantSession(): ParticipantSession | null {
       return {
         participantId: parsedValue.participantId,
         participantCode: parsedValue.participantCode,
+        postbackUrl:
+          typeof parsedValue.postbackUrl === 'string'
+            ? parsedValue.postbackUrl
+            : undefined,
       };
     }
   } catch {
