@@ -16,6 +16,18 @@ CREATE TABLE public.participant_post_likes (
   CONSTRAINT participant_post_likes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(post_id)
 );
 
+CREATE TABLE public.participant_post_reposts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  participant_id uuid NOT NULL,
+  post_id uuid NOT NULL,
+  reposted boolean NOT NULL DEFAULT true,
+  reposted_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT participant_post_reposts_pkey PRIMARY KEY (id),
+  CONSTRAINT participant_post_reposts_participant_post_key UNIQUE (participant_id, post_id),
+  CONSTRAINT participant_post_reposts_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.participant_profiles(participant_id),
+  CONSTRAINT participant_post_reposts_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(post_id)
+);
+
 CREATE TABLE public.feedset (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   participant_id uuid NOT NULL,
